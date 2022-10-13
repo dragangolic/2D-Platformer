@@ -1,0 +1,228 @@
+                     FIRST STAGE
+
+MAIN.PY
+import pygame, sys
+from settings import *
+from level import Level
+
+# Pygame setup
+pygame.init()
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption('Platformer')
+clock = pygame.time.Clock()
+
+level = Level()
+
+while True:
+    # event loop
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+    screen.fill(BG_COLOR)
+    level.run()
+
+    # drawing logic
+    pygame.display.update()
+    clock.tick(60)
+
+LEVEL.PY
+
+import pygame
+from settings import *
+from tile import Tile
+from player import Player
+
+
+class Level:
+    def __init__(self):
+
+        # level setup
+        self.display_surface = pygame.display.get_surface()
+
+        # sprite group setup
+        self.visible_sprites = pygame.sprite.Group()  # this sprites draw anything
+        self.active_sprites = pygame.sprite.Group()  # this one update any sprites
+        self.collision_sprites = pygame.sprite.Group()  # player can collide with this sprites
+
+        self.setup_level()
+
+    def setup_level(self):
+        for row_index, row in enumerate(LEVEL_MAP):
+            for col_index, col in enumerate(row):
+                x = col_index * TILE_SIZE
+                y = row_index * TILE_SIZE
+                if col == 'x':
+                    Tile((x, y), [self.visible_sprites])  # (pos,groups)
+                if col == 'P':
+                    Player((x, y), [self.visible_sprites])  # (pos,groups)
+
+    def run(self):
+        # run the entire game(level)
+        self.visible_sprites.draw(self.display_surface)
+
+PLAYER.PY
+
+import pygame
+from settings import *
+
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, pos, groups):
+        super(). __init__(groups)
+        self.image = pygame. Surface((TILE_SIZE // 2, TILE_SIZE))
+        self.image.fill(PLAYER_COLOR)
+        self.rect = self.image.get_rect(topleft=pos)
+
+TILE.PY
+
+import pygame
+from settings import *
+
+
+class Tile(pygame.sprite.Sprite):
+    def __init__(self, pos, groups):
+        super(). __init__(groups)
+        self.image = pygame. Surface((TILE_SIZE, TILE_SIZE))
+        self.image.fill(TILE_COLOR)
+        self.rect = self.image.get_rect(topleft=pos)
+
+
+SETTINGS.PY
+
+LEVEL_MAP = [
+'                            ',
+'                            ',
+'                            ',
+'       XXXX           XX    ',
+'   P                        ',
+'XXXXX         XX         XX ',
+' XXXX       XX              ',
+' XX    X  XXXX    XX  XX    ',
+'       X  XXXX    XX  XXX   ',
+'    XXXX  XXXXXX  XX  XXXX  ',
+'XXXXXXXX  XXXXXX  XX  XXXX  ']
+
+TILE_SIZE = 64
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+
+# colors
+BG_COLOR = '#060C17'
+PLAYER_COLOR = '#C4F7FF'
+TILE_COLOR = '#94D7F2'
+
+# camera
+CAMERA_BORDERS = {
+    'left': 100,
+    'right': 200,
+    'top': 100,
+    'bottom': 150
+}
+
+                            SECOND STAGE
+
+LEVEL.PY
+import pygame
+from settings import *
+from tile import Tile
+from player import Player
+
+
+class Level:
+    def __init__(self):
+
+        # level setup
+        self.display_surface = pygame.display.get_surface()
+
+        # sprite group setup
+        self.visible_sprites = pygame.sprite.Group()  # this sprites draw anything
+        self.active_sprites = pygame.sprite.Group()  # this one update any sprites
+        self.collision_sprites = pygame.sprite.Group()  # player can collide with this sprites
+
+        self.setup_level()
+
+    def setup_level(self):
+        for row_index, row in enumerate(LEVEL_MAP):
+            for col_index, col in enumerate(row):
+                x = col_index * TILE_SIZE
+                y = row_index * TILE_SIZE
+                if col == 'x':
+                    Tile((x, y), [self.visible_sprites, self.collision_sprites])  # (pos,groups)
+                if col == 'P':
+                    Player((x, y), [self.visible_sprites, self.active_sprites], self.collision_sprites)
+                    # (pos,groups), new parameter
+
+    def run(self):
+        # run the entire game(level)
+        self.visible_sprites.draw(self.display_surface)
+
+
+PLAYER.PY
+import pygame
+from settings import *
+
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, pos, groups, collision_sprites):
+        super(). __init__(groups)
+        self.image = pygame. Surface((TILE_SIZE // 2, TILE_SIZE))
+        self.image.fill(PLAYER_COLOR)
+        self.rect = self.image.get_rect(topleft=pos)
+
+        # player movement
+        self.direction = pygame.math.Vector2()
+        self.speed = 8
+        self.gravity = 0.8
+        self.jump_speed = 16
+        self.collision_sprites = collision_sprites
+        self.on_floor = False
+
+    def input(self):
+        keys = pygame.key.get_pressed()
+
+        if keys[pygame.K_RIGHT]:
+            self.direction.x = 1
+        elif keys[pygame.K_LEFT]:
+            self.direction.x = -1
+        else:
+            self.direction.x = 0
+        if keys[pygame.K_SPACE] and self.on_floor:
+            self.direction.y = -self.jump_speed
+
+    def horizontal_collisions(self):
+        for sprite in self.collision_sprites.sprites():
+            if sprite.rect.colliderect(self.rect):
+                if self.direction.x < 0:
+                    self.rect.left = sprite.rect.right
+                if self.direction.x > 0:
+                    self.rect.right = sprite.rect.left
+
+    def vertical_collisions(self):
+        for sprite in self.collision_sprites.sprites():
+            if sprite.rect.colliderect(self.rect):
+                if self.direction.y < 0:
+                    self.rect.top = sprite.rect.bottom
+                    self.direction.y = 0  # if player fall from many tiles it will desapier
+                    self.on_floor = True
+                if self.direction.x > 0:
+                    self.rect.bottom = sprite.rect.top
+                    self.direction.y = 0  # if player hit the ceiling,gravity will pull him down
+
+        if self.on_floor and self.direction.y != 0:
+           self.on_floor = False
+
+    def apply_gravity(self):
+        self.direction.y += self.gravity
+        self.rect.y += self.direction.y
+
+    def update(self):
+        self.input()
+        self.rect.x += self.direction.x * self.speed
+        self.hirozontal_collisions()
+        self.apply_gravity()
+        self.vertical_collisions()
+
+                        THIRD STAGE
+
